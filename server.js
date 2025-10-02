@@ -8,7 +8,7 @@ const fs = require('fs');
 const bodyParser = require('body-parser');
 
 const app = express();
-const port = 3000;
+const port = process.env.PORT || 3000;
 
 // Check and create uploads folder if not exists
 if (!fs.existsSync('uploads')) {
