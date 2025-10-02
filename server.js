@@ -10,35 +10,56 @@ const bodyParser = require('body-parser');
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Check and create uploads folder if not exists
-if (!fs.existsSync('uploads')) {
-  fs.mkdirSync('uploads');
+// Configurar entorno para producción o desarrollo
+const isProduction = process.env.NODE_ENV === 'production';
+const dbPath = isProduction ? '/app/data/db.sqlite' : 'db.sqlite';
+const uploadsPath = isProduction ? '/app/data/uploads/' : 'uploads/';
+
+// Crear carpetas necesarias
+const ensureDirectoryExists = (dirPath) => {
+  try {
+    if (!fs.existsSync(dirPath)) {
+      fs.mkdirSync(dirPath, { recursive: true });
+      console.log(`Carpeta creada: ${dirPath}`);
+    }
+  } catch (err) {
+    console.error(`Error creando carpeta ${dirPath}:`, err);
+  }
+};
+
+// Crear carpetas para SQLite y uploads
+if (isProduction) {
+  ensureDirectoryExists('/app/data');
 }
+ensureDirectoryExists(uploadsPath);
 
 // Middleware
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static('public'));
-app.use('/uploads', express.static('uploads'));
+app.use('/uploads', express.static(uploadsPath));
+if (isProduction) {
+  app.set('trust proxy', 1); // Para HTTPS en Render
+}
 app.use(session({
-  secret: 'secret-key',
+  secret: process.env.SESSION_SECRET || 'secret-key-local',
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: false,
+    secure: isProduction,
     maxAge: 24 * 60 * 60 * 1000
   }
 }));
 
 // Config Multer para uploads
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, 'uploads/'),
+  destination: (req, file, cb) => cb(null, uploadsPath),
   filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname)
 });
 const upload = multer({ storage });
 
 // DB Setup
-const db = new sqlite3.Database('db.sqlite');
+const db = new sqlite3.Database(dbPath);
 db.serialize(() => {
   db.run(`CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -277,7 +298,12 @@ app.delete('/api/files/:id', isAuthenticated, (req, res) => {
       console.error('Error obteniendo archivo para eliminar:', err);
       return res.status(500).json({ error: 'Error en servidor' });
     }
-    if (file) fs.unlink(path.join(__dirname, file.filename), () => {});
+    if (file) {
+      const filePath = path.join(__dirname, isProduction ? '/app/data' + file.filename : file.filename);
+      fs.unlink(filePath, (err) => {
+        if (err) console.error('Error eliminando archivo:', err);
+      });
+    }
     db.run("DELETE FROM files WHERE id=? AND user_id=?", [req.params.id, req.session.userId], function(err) {
       if (err) {
         console.error('Error eliminando archivo:', err);
@@ -362,7 +388,8 @@ app.delete('/api/resources/:id', isAuthenticated, (req, res) => {
       return res.status(500).json({ error: 'Error en servidor' });
     }
     if (resource && resource.image) {
-      fs.unlink(path.join(__dirname, resource.image), err => {
+      const filePath = path.join(__dirname, isProduction ? '/app/data' + resource.image : resource.image);
+      fs.unlink(filePath, err => {
         if (err) console.error('Error eliminando imagen:', err);
       });
     }
@@ -479,7 +506,8 @@ app.delete('/api/topics/:id', isAuthenticated, (req, res) => {
       return res.status(500).json({ error: 'Error en servidor' });
     }
     if (topic && topic.image) {
-      fs.unlink(path.join(__dirname, topic.image), err => {
+      const filePath = path.join(__dirname, isProduction ? '/app/data' + topic.image : topic.image);
+      fs.unlink(filePath, err => {
         if (err) console.error('Error eliminando imagen:', err);
       });
     }
