@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Archivos</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body onload="loadUser(); loadFiles()">
+  <nav class="navbar navbar-expand-lg">
+    <div class="container">
+      <a class="navbar-brand" href="home.html">Plataforma Educativa</a>
+      <span id="user-name" class="text-white me-auto"></span>
+      <a href="tutorial.html" class="btn me-2">Tutorial</a>
+      <button onclick="logout()" class="btn">Cerrar Sesión</button>
+    </div>
+  </nav>
+  <div class="sidebar">
+    <h4>Menú</h4>
+    <a href="account.html"><i class="bi bi-person"></i> Cuenta</a>
+    <a href="tasks.html"><i class="bi bi-check-square"></i> Tareas</a>
+    <a href="files.html"><i class="bi bi-folder"></i> Archivos</a>
+    <a href="resources.html"><i class="bi bi-link"></i> Recursos</a>
+    <a href="notes.html"><i class="bi bi-pencil"></i> Notas</a>
+    <a href="topics.html"><i class="bi bi-book"></i> Temas</a>
+  </div>
+  <div class="main-content container mt-5">
+    <h1 class="text-center">Archivos</h1>
+    <div class="row justify-content-center">
+      <div class="col-md-8">
+        <div class="card">
+          <form id="file-form" onsubmit="uploadFile(); return false;">
+            <div class="mb-3">
+              <label for="file" class="form-label">Seleccionar Archivo</label>
+              <input type="file" name="file" class="form-control">
+            </div>
+            <div class="mb-3">
+              <label for="category" class="form-label">Categoría</label>
+              <select name="category" class="form-control">
+                <option value="photos">Fotos (PNG/JPG)</option>
+                <option value="docs">Documentos (PDF/Word/Excel/TXT)</option>
+                <option value="videos">Videos</option>
+                <option value="audios">Audios</option>
+              </select>
+            </div>
+            <button type="submit" class="btn btn-success d-block mx-auto">Subir</button>
+          </form>
+          <div id="file-gallery" class="gallery d-flex flex-wrap justify-content-center mt-3"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="js/scripts.js"></script>
+</body>
+</html>

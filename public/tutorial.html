@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tutorial</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body onload="loadUser()">
+  <nav class="navbar navbar-expand-lg">
+    <div class="container">
+      <a class="navbar-brand" href="home.html">Plataforma Educativa</a>
+      <span id="user-name" class="text-white me-auto"></span>
+      <a href="tutorial.html" class="btn me-2">Tutorial</a>
+      <button onclick="logout()" class="btn">Cerrar Sesión</button>
+    </div>
+  </nav>
+  <div class="sidebar">
+    <h4>Menú</h4>
+    <a href="account.html"><i class="bi bi-person"></i> Cuenta</a>
+    <a href="tasks.html"><i class="bi bi-check-square"></i> Tareas</a>
+    <a href="files.html"><i class="bi bi-folder"></i> Archivos</a>
+    <a href="resources.html"><i class="bi bi-link"></i> Recursos</a>
+    <a href="notes.html"><i class="bi bi-pencil"></i> Notas</a>
+    <a href="topics.html"><i class="bi bi-book"></i> Temas</a>
+  </div>
+  <div class="main-content container mt-5">
+    <h1 class="text-center">Tutorial y FAQ</h1>
+    <div class="row justify-content-center">
+      <div class="col-md-8">
+        <div class="accordion" id="faq">
+          <div class="accordion-item">
+            <h2 class="accordion-header"><button class="accordion-button" data-bs-toggle="collapse" data-bs-target="#q1">¿Cómo creo una tarea?</button></h2>
+            <div id="q1" class="accordion-collapse collapse"><div class="accordion-body">Ve a la sección de Tareas, ingresa un título y selecciona una categoría (como Matemáticas o Historia). Haz clic en "Añadir" para guardar la tarea.</div></div>
+          </div>
+          <div class="accordion-item">
+            <h2 class="accordion-header"><button class="accordion-button" data-bs-toggle="collapse" data-bs-target="#q2">¿Cómo subo un archivo?</button></h2>
+            <div id="q2" class="accordion-collapse collapse"><div class="accordion-body">En la sección de Archivos, selecciona un archivo desde tu dispositivo, elige una categoría (fotos, videos, audios, otros) y haz clic en "Subir".</div></div>
+          </div>
+          <div class="accordion-item">
+            <h2 class="accordion-header"><button class="accordion-button" data-bs-toggle="collapse" data-bs-target="#q3">¿Cómo edito mi cuenta?</button></h2>
+            <div id="q3" class="accordion-collapse collapse"><div class="accordion-body">Ve a Cuenta, actualiza tu nombre, email, teléfono, redes sociales o foto de perfil, y haz clic en "Actualizar".</div></div>
+          </div>
+          <div class="accordion-item">
+            <h2 class="accordion-header"><button class="accordion-button" data-bs-toggle="collapse" data-bs-target="#q4">¿Cómo agrego un tema educativo?</button></h2>
+            <div id="q4" class="accordion-collapse collapse"><div class="accordion-body">En Temas, haz clic en "Agregar Nuevo Tema", completa los campos obligatorios (materia, subtema, explicación), opcionalmente añade un enlace o imagen, y haz clic en "Guardar Tema".</div></div>
+          </div>
+          <div class="accordion-item">
+            <h2 class="accordion-header"><button class="accordion-button" data-bs-toggle="collapse" data-bs-target="#q5">¿Cómo edito o elimino un tema?</button></h2>
+            <div id="q5" class="accordion-collapse collapse"><div class="accordion-body">En la sección de Temas, busca el tema en la cuadrícula, haz clic en "Editar" para modificar los campos o en "Eliminar" y confirma para borrarlo.</div></div>
+          </div>
+          <div class="accordion-item">
+            <h2 class="accordion-header"><button class="accordion-button" data-bs-toggle="collapse" data-bs-target="#q6">¿Cómo añado un recurso externo?</button></h2>
+            <div id="q6" class="accordion-collapse collapse"><div class="accordion-body">Ve a Recursos, ingresa un título y un enlace (por ejemplo, un video de YouTube), y haz clic en "Añadir".</div></div>
+          </div>
+          <div class="accordion-item">
+            <h2 class="accordion-header"><button class="accordion-button" data-bs-toggle="collapse" data-bs-target="#q7">¿Cómo creo una nota?</button></h2>
+            <div id="q7" class="accordion-collapse collapse"><div class="accordion-body">En Notas, escribe tu nota en el campo de texto y haz clic en "Añadir". Para editar, modifica el texto y haz clic en "Guardar".</div></div>
+          </div>
+          <div class="accordion-item">
+            <h2 class="accordion-header"><button class="accordion-button" data-bs-toggle="collapse" data-bs-target="#q8">¿Por qué no puedo iniciar sesión?</button></h2>
+            <div id="q8" class="accordion-collapse collapse"><div class="accordion-body">Verifica que tu nombre de usuario y contraseña sean correctos. Si olvidaste tu contraseña, contacta al administrador. Asegúrate de estar registrado.</div></div>
+          </div>
+          <div class="accordion-item">
+            <h2 class="accordion-header"><button class="accordion-button" data-bs-toggle="collapse" data-bs-target="#q9">¿Cómo cierro sesión?</button></h2>
+            <div id="q9" class="accordion-collapse collapse"><div class="accordion-body">Haz clic en el botón "Cerrar Sesión" en la barra de navegación superior, y serás redirigido a la página de inicio.</div></div>
+          </div>
+          <div class="accordion-item">
+            <h2 class="accordion-header"><button class="accordion-button" data-bs-toggle="collapse" data-bs-target="#q10">¿Qué hago si no se cargan mis archivos o temas?</button></h2>
+            <div id="q10" class="accordion-collapse collapse"><div class="accordion-body">Verifica tu conexión a internet y recarga la página. Si el problema persiste, intenta cerrar sesión y volver a iniciar. Contacta al administrador si continúa.</div></div>
+          </div>
+          <div class="accordion-item">
+            <h2 class="accordion-header"><button class="accordion-button" data-bs-toggle="collapse" data-bs-target="#q11">¿Puedo subir cualquier tipo de archivo?</button></h2>
+            <div id="q11" class="accordion-collapse collapse"><div class="accordion-body">Sí, pero clasifícalos como fotos, videos, audios u otros. Asegúrate de que los archivos no sean demasiado grandes para evitar problemas de carga.</div></div>
+          </div>
+          <div class="accordion-item">
+            <h2 class="accordion-header"><button class="accordion-button" data-bs-toggle="collapse" data-bs-target="#q12">¿Cómo marco una tarea como completada?</button></h2>
+            <div id="q12" class="accordion-collapse collapse"><div class="accordion-body">En Tareas, haz clic en la casilla de verificación junto a la tarea. Se marcará como completada automáticamente.</div></div>
+          </div>
+          <div class="accordion-item">
+            <h2 class="accordion-header"><button class="accordion-button" data-bs-toggle="collapse" data-bs-target="#q13">¿Puedo editar o eliminar recursos y notas?</button></h2>
+            <div id="q13" class="accordion-collapse collapse"><div class="accordion-body">Sí, en Recursos y Notas, usa los botones "Editar" o "Eliminar" junto a cada elemento. Para editar, modifica los campos y guarda; para eliminar, confirma la acción.</div></div>
+          </div>
+          <div class="accordion-item">
+            <h2 class="accordion-header"><button class="accordion-button" data-bs-toggle="collapse" data-bs-target="#q14">¿Por qué no veo mis temas o archivos?</button></h2>
+            <div id="q14" class="accordion-collapse collapse"><div class="accordion-body">Asegúrate de estar en la sección correcta (Temas o Archivos) y de haber iniciado sesión con la cuenta correcta. Si no ves nada, intenta recargar la página.</div></div>
+          </div>
+          <div class="accordion-item">
+            <h2 class="accordion-header"><button class="accordion-button" data-bs-toggle="collapse" data-bs-target="#q15">¿Cómo navego entre las secciones?</button></h2>
+            <div id="q15" class="accordion-collapse collapse"><div class="accordion-body">Usa la barra lateral izquierda para acceder a Cuenta, Tareas, Archivos, Recursos, Notas o Temas. Haz clic en el ícono o nombre de la sección.</div></div>
+          </div>
+          <div class="accordion-item">
+            <h2 class="accordion-header"><button class="accordion-button" data-bs-toggle="collapse" data-bs-target="#q16">¿Qué pasa si subo una imagen grande en un tema?</button></h2>
+            <div id="q16" class="accordion-collapse collapse"><div class="accordion-body">Las imágenes grandes pueden tardar en cargarse. Se recomienda usar imágenes optimizadas (menor a 2MB) para mejor rendimiento.</div></div>
+          </div>
+          <div class="accordion-item">
+            <h2 class="accordion-header"><button class="accordion-button" data-bs-toggle="collapse" data-bs-target="#q17">¿Puedo usar la plataforma en mi celular?</button></h2>
+            <div id="q17" class="accordion-collapse collapse"><div class="accordion-body">Sí, la plataforma es responsive. Usa el navegador de tu celular para acceder, y la barra lateral se adaptará automáticamente.</div></div>
+          </div>
+          <div class="accordion-item">
+            <h2 class="accordion-header"><button class="accordion-button" data-bs-toggle="collapse" data-bs-target="#q18">¿Cómo me registro en la plataforma?</button></h2>
+            <div id="q18" class="accordion-collapse collapse"><div class="accordion-body">En la página de inicio, haz clic en "Registrarse", completa el formulario con tu nombre, email, usuario y contraseña, y envíalo.</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="js/scripts.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

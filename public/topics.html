@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Temas</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body onload="initializeTopicsPage()">
+  <nav class="navbar navbar-expand-lg">
+    <div class="container">
+      <a class="navbar-brand" href="home.html">Plataforma Educativa</a>
+      <span id="user-name" class="text-white me-auto"></span>
+      <a href="tutorial.html" class="btn me-2">Tutorial</a>
+      <button onclick="logout()" class="btn">Cerrar Sesión</button>
+    </div>
+  </nav>
+  <div class="sidebar">
+    <h4>Menú</h4>
+    <a href="account.html"><i class="bi bi-person"></i> Cuenta</a>
+    <a href="tasks.html"><i class="bi bi-check-square"></i> Tareas</a>
+    <a href="files.html"><i class="bi bi-folder"></i> Archivos</a>
+    <a href="resources.html"><i class="bi bi-link"></i> Recursos</a>
+    <a href="notes.html"><i class="bi bi-pencil"></i> Notas</a>
+    <a href="topics.html"><i class="bi bi-book"></i> Temas</a>
+  </div>
+  
+  <div class="main-content container">
+    <div class="topics-container">
+      <h1 class="topic-page-title">Temas Educativos</h1>
+      
+      <!-- Botón para mostrar/ocultar formulario -->
+      <div class="text-center">
+        <button class="toggle-form-btn" id="toggleFormBtn">
+          <i class="bi bi-plus-circle"></i>
+          Agregar Nuevo Tema
+        </button>
+      </div>
+
+      <!-- Formulario colapsable -->
+      <div class="topic-form-container" id="topicFormContainer">
+        <div class="card">
+          <h3 class="text-center mb-4" style="color: var(--dark-turquoise);">Nuevo Tema Educativo</h3>
+          <form id="topic-form">
+            <div class="topic-form-grid">
+              <div class="form-group">
+                <label for="subject" class="form-label">Materia *</label>
+                <input type="text" id="subject" name="subject" class="form-control" required>
+              </div>
+              
+              <div class="form-group">
+                <label for="subtopic" class="form-label">Subtema *</label>
+                <input type="text" id="subtopic" name="subtopic" class="form-control" required>
+              </div>
+              
+              <div class="form-group full-width">
+                <label for="explanation" class="form-label">Explicación *</label>
+                <textarea id="explanation" name="explanation" class="form-control" rows="4" required placeholder="Describe el tema educativo..."></textarea>
+              </div>
+              
+              <div class="form-group">
+                <label for="link" class="form-label">Enlace de Recursos</label>
+                <input type="url" id="link" name="link" class="form-control" placeholder="https://ejemplo.com">
+              </div>
+              
+              <div class="form-group">
+                <label for="image" class="form-label">Imagen Ilustrativa</label>
+                <input type="file" id="image" name="image" class="form-control" accept="image/*">
+              </div>
+            </div>
+            
+            <div class="form-actions">
+              <button type="button" class="btn btn-success" onclick="addTopic()">
+                <i class="bi bi-check-lg"></i> Guardar Tema
+              </button>
+              <button type="button" class="btn btn-secondary" onclick="toggleTopicForm()">
+                <i class="bi bi-x-lg"></i> Cancelar
+              </button>
+              <button type="reset" class="btn btn-light">
+                <i class="bi bi-arrow-clockwise"></i> Limpiar
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Grid de temas existentes -->
+      <div id="topics-content">
+        <div class="topics-grid" id="topics-grid">
+          <!-- Los temas se cargarán aquí dinámicamente -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/scripts.js"></script>
+  <script>
+    let isTopicFormVisible = false;
+    let currentEditId = null; // Para trackear si es edit o add
+
+    function initializeTopicsPage() {
+      loadUser();
+      loadTopics();
+      
+      // Agregar event listener al botón
+      document.getElementById('toggleFormBtn').addEventListener('click', toggleTopicForm);
+    }
+
+    function toggleTopicForm() {
+      const formContainer = document.getElementById('topicFormContainer');
+      const toggleBtn = document.getElementById('toggleFormBtn');
+      
+      isTopicFormVisible = !isTopicFormVisible;
+      
+      if (isTopicFormVisible) {
+        formContainer.classList.add('expanded');
+        toggleBtn.innerHTML = '<i class="bi bi-dash-circle"></i> Ocultar Formulario';
+      } else {
+        formContainer.classList.remove('expanded');
+        toggleBtn.innerHTML = '<i class="bi bi-plus-circle"></i> Agregar Nuevo Tema';
+        resetTopicForm();
+      }
+    }
+
+    function resetTopicForm() {
+      document.getElementById('topic-form').reset();
+      currentEditId = null;
+      document.querySelector('.form-actions .btn-success').innerHTML = '<i class="bi bi-check-lg"></i> Guardar Tema';
+    }
+
+    function loadTopics() {
+      apiFetch('/api/topics', 'GET')
+        .then(topics => {
+          const topicsGrid = document.getElementById('topics-grid');
+          console.log('Temas cargados:', topics); // Para debug
+          
+          if (!topics || topics.length === 0) {
+            topicsGrid.innerHTML = `
+              <div class="empty-topics">
+                <i class="bi bi-journal-text"></i>
+                <h3>No hay temas aún</h3>
+                <p>¡Comienza agregando el primer tema educativo!</p>
+              </div>
+            `;
+            return;
+          }
+
+          topicsGrid.innerHTML = topics.map(topic => `
+            <div class="topic-card">
+              <div class="topic-header">
+                <span class="topic-subject">${escapeHtml(topic.subject)}</span>
+              </div>
+              <h3 class="topic-subtopic">${escapeHtml(topic.subtopic)}</h3>
+              <p class="topic-explanation">${escapeHtml(topic.explanation)}</p>
+              
+              ${topic.image ? `
+                <img src="${topic.image}" alt="${escapeHtml(topic.subtopic)}" class="topic-image">
+              ` : ''}
+              
+              ${topic.link ? `
+                <a href="${topic.link}" target="_blank" class="topic-link">
+                  <i class="bi bi-link-45deg"></i>
+                  Ver recurso relacionado
+                </a>
+              ` : ''}
+              
+              <div class="topic-actions">
+                <button class="btn btn-primary btn-sm" onclick="editTopic(${topic.id})">
+                  <i class="bi bi-pencil"></i> Editar
+                </button>
+                <button class="btn btn-danger btn-sm" onclick="deleteTopic(${topic.id})">
+                  <i class="bi bi-trash"></i> Eliminar
+                </button>
+              </div>
+            </div>
+          `).join('');
+        })
+        .catch(error => {
+          console.error('Error loading topics:', error);
+          document.getElementById('topics-grid').innerHTML = `
+            <div class="empty-topics">
+              <i class="bi bi-exclamation-triangle"></i>
+              <h3>Error al cargar temas</h3>
+              <p>Intenta recargar la página</p>
+            </div>
+          `;
+        });
+    }
+
+    async function addTopic() {
+      const formData = new FormData();
+      const subject = document.getElementById('subject').value;
+      const subtopic = document.getElementById('subtopic').value;
+      const explanation = document.getElementById('explanation').value;
+      const link = document.getElementById('link').value;
+      const imageFile = document.getElementById('image').files[0];
+
+      if (!subject || !subtopic || !explanation) {
+        alert('Por favor completa los campos obligatorios (*)');
+        return;
+      }
+
+      formData.append('subject', subject);
+      formData.append('subtopic', subtopic);
+      formData.append('explanation', explanation);
+      formData.append('link', link);
+      if (imageFile) {
+        formData.append('image', imageFile);
+      }
+
+      try {
+        let response;
+        if (currentEditId) {
+          // Modo edición: PUT
+          response = await apiFetch(`/api/topics/${currentEditId}`, 'PUT', formData, true);
+        } else {
+          // Modo add: POST
+          response = await apiFetch(`/api/topics`, 'POST', formData, true);
+        }
+        if (response.success) {
+          toggleTopicForm();
+          loadTopics();
+          showNotification('Tema guardado correctamente', 'success');
+        } else {
+          throw new Error('Error al guardar tema');
+        }
+      } catch (error) {
+        console.error('Error:', error);
+        showNotification('Error al guardar el tema', 'error');
+      }
+    }
+
+    async function editTopic(id) {
+      try {
+        const topic = await apiFetch(`/api/topics/${id}`);
+        if (!topic) throw new Error('Tema no encontrado');
+
+        // Popular form
+        document.getElementById('subject').value = topic.subject;
+        document.getElementById('subtopic').value = topic.subtopic;
+        document.getElementById('explanation').value = topic.explanation;
+        document.getElementById('link').value = topic.link || '';
+        // Image no se puede popular (file input), pero se puede actualizar si suben nueva
+
+        currentEditId = id;
+        document.querySelector('.form-actions .btn-success').innerHTML = '<i class="bi bi-check-lg"></i> Actualizar Tema';
+
+        // Mostrar form si oculto
+        if (!isTopicFormVisible) toggleTopicForm();
+      } catch (error) {
+        console.error('Error loading topic for edit:', error);
+        showNotification('Error al cargar el tema para edición', 'error');
+      }
+    }
+
+    async function deleteTopic(id) {
+      if (confirm('¿Estás seguro de que quieres eliminar este tema?')) {
+        try {
+          const response = await apiFetch(`/api/topics/${id}`, 'DELETE');
+          if (response.success) {
+            loadTopics();
+            showNotification('Tema eliminado correctamente', 'success');
+          }
+        } catch (error) {
+          console.error('Error:', error);
+          showNotification('Error al eliminar el tema', 'error');
+        }
+      }
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function showNotification(message, type) {
+      alert(message); // Simple, puedes mejorar con toast si quieres
+    }
+  </script>
+</body>
+</html>

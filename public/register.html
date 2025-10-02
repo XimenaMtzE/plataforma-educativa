@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Registrarse</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="no-sidebar">
+  <nav class="navbar navbar-expand-lg">
+    <div class="container">
+      <a class="navbar-brand" href="/">Plataforma Educativa</a>
+      <div class="ms-auto">
+        <a href="login.html" class="btn">Iniciar Sesión</a>
+      </div>
+    </div>
+  </nav>
+  <div class="main-content container mt-5">
+    <div class="row justify-content-center">
+      <div class="col-md-6">
+        <div class="card">
+          <h2 class="text-center">Registrarse</h2>
+          <form id="register-form" enctype="multipart/form-data">
+            <div class="mb-3">
+              <label for="username" class="form-label">Usuario *</label>
+              <input type="text" id="username" name="username" class="form-control" required>
+            </div>
+            <div class="mb-3">
+              <label for="name" class="form-label">Nombre *</label>
+              <input type="text" id="name" name="name" class="form-control" required>
+            </div>
+            <div class="mb-3">
+              <label for="email" class="form-label">Correo *</label>
+              <input type="email" id="email" name="email" class="form-control" required pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\\.[a-z]{2,}$">
+            </div>
+            <div class="mb-3">
+              <label for="password" class="form-label">Contraseña *</label>
+              <input type="password" id="password" name="password" class="form-control" required minlength="6">
+            </div>
+            <div class="mb-3">
+              <label for="phone" class="form-label">Teléfono</label>
+              <input type="text" id="phone" name="phone" class="form-control">
+            </div>
+            <div class="mb-3">
+              <label for="socials" class="form-label">Redes Sociales</label>
+              <input type="text" id="socials" name="socials" class="form-control">
+            </div>
+            <div class="mb-3">
+              <label for="profile-pic" class="form-label">Foto de Perfil (Opcional)</label>
+              <input type="file" id="profile-pic" name="profile_pic" class="form-control" accept="image/*">
+            </div>
+            <button type="submit" class="btn btn-primary w-100">Registrar</button>
+          </form>
+          <p class="text-center mt-3">¿Ya tienes cuenta? <a href="login.html">Inicia sesión</a></p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="js/scripts.js"></script>
+  <script>
+    document.getElementById('register-form').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const formData = new FormData(event.target);
+      // Depuración: Mostrar datos enviados desde el cliente
+      for (let [key, value] of formData.entries()) {
+        console.log(`Formulario - ${key}: ${value}`);
+      }
+      try {
+        const res = await fetch('/api/register', {
+          method: 'POST',
+          body: formData
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          alert('Registro exitoso. Por favor, inicia sesión.');
+          window.location.href = '/login.html';
+        } else {
+          alert('Error al registrarse: ' + (data.error || 'Intenta de nuevo'));
+        }
+      } catch (e) {
+        console.error('Error en registro:', e);
+        alert('Error de conexión: ' + e.message);
+      }
+    });
+  </script>
+</body>
+</html>
