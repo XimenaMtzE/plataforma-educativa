@@ -47,20 +47,26 @@ app.use('/uploads', express.static(uploadsPath));
 if (isProduction) {
   app.set('trust proxy', 1); // Para HTTPS en Railway
 }
-app.use(session({
-  store: new SQLiteStore({
-    db: 'sessions.sqlite',
-    dir: isProduction ? '/app/data' : '.',
-    concurrentDB: true
-  }),
-  secret: process.env.SESSION_SECRET || 'secret-key-local',
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    secure: isProduction,
-    maxAge: 24 * 60 * 60 * 1000 // 24 horas
-  }
-}));
+try {
+  app.use(session({
+    store: new SQLiteStore({
+      db: 'sessions.sqlite',
+      dir: isProduction ? '/app/data' : '.',
+      concurrentDB: true
+    }),
+    secret: process.env.SESSION_SECRET || 'secret-key-local',
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      secure: isProduction,
+      maxAge: 24 * 60 * 60 * 1000 // 24 horas
+    }
+  }));
+  console.log('Almacén de sesiones SQLite inicializado correctamente');
+} catch (err) {
+  console.error('Error al inicializar el almacén de sesiones SQLite:', err);
+  process.exit(1);
+}
 
 // Config Multer para uploads
 const storage = multer.diskStorage({
@@ -77,7 +83,7 @@ try {
   console.log(`Base de datos conectada: ${dbPath}`);
 } catch (err) {
   console.error(`Error al abrir la base de datos ${dbPath}:`, err);
-  process.exit(1); // Terminar proceso si no se puede conectar
+  process.exit(1);
 }
 
 // Crear tablas si no existen
@@ -138,10 +144,23 @@ try {
     db.exec("ALTER TABLE resources ADD COLUMN image TEXT");
     console.log("Columna 'image' añadida a la tabla resources");
   }
+  console.log('Tablas creadas o verificadas correctamente');
 } catch (err) {
   console.error('Error al crear tablas:', err);
   process.exit(1);
 }
+
+// Healthcheck para Railway
+app.get('/health', (req, res) => {
+  try {
+    // Verificar que la base de datos esté accesible
+    db.prepare('SELECT 1').get();
+    res.status(200).json({ status: 'ok' });
+  } catch (err) {
+    console.error('Error en /health:', err);
+    res.status(500).json({ status: 'error', error: err.message });
+  }
+});
 
 // Middleware para check login
 function isAuthenticated(req, res, next) {
@@ -621,4 +640,5 @@ process.on('SIGTERM', () => {
   process.exit(0);
 });
 
-app.listen(port, () => console.log(`Server running on http://localhost:${port}`));
+// Escuchar en 0.0.0.0 para Railway
+app.listen(port, '0.0.0.0', () => console.log(`Server running on http://0.0.0.0:${port}`));
