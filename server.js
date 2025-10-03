@@ -82,6 +82,15 @@ const upload = multer({ storage });
 // Crear tablas en PostgreSQL
 async function initializeDatabase() {
   try {
+    // Crear tabla de sesiones
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS session (
+        sid VARCHAR PRIMARY KEY,
+        sess JSON NOT NULL,
+        expire TIMESTAMP(6) NOT NULL
+      )
+    `);
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
