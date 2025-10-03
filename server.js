@@ -82,9 +82,6 @@ try {
   console.log(`Base de datos conectada: ${dbPath}`);
 } catch (err) {
   console.error(`Error al abrir la base de datos ${dbPath}:`, err);
-  if (err.code === 'SQLITE_CANTOPEN') {
-    console.error('No se puede abrir db.sqlite. Verifica que el volumen en /app/data esté montado y tenga permisos de escritura.');
-  }
   process.exit(1);
 }
 
