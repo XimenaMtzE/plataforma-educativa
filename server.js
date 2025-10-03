@@ -2,6 +2,7 @@ const express = require('express');
 const Database = require('better-sqlite3');
 const bcrypt = require('bcryptjs');
 const session = require('express-session');
+const SQLiteStore = require('connect-sqlite3')(session);
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -39,15 +40,20 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static('public'));
 app.use('/uploads', express.static(uploadsPath));
 if (isProduction) {
-  app.set('trust proxy', 1); // Para HTTPS en Render
+  app.set('trust proxy', 1); // Para HTTPS en Railway
 }
 app.use(session({
+  store: new SQLiteStore({
+    db: dbPath,
+    dir: isProduction ? '/app/data' : '.',
+    concurrentDB: true
+  }),
   secret: process.env.SESSION_SECRET || 'secret-key-local',
   resave: false,
   saveUninitialized: false,
   cookie: {
     secure: isProduction,
-    maxAge: 24 * 60 * 60 * 1000
+    maxAge: 24 * 60 * 60 * 1000 // 24 horas
   }
 }));
 
@@ -62,6 +68,7 @@ const upload = multer({ storage });
 const db = new Database(dbPath);
 db.pragma('journal_mode = WAL'); // Modo de escritura seguro
 
+// Crear tablas si no existen
 db.exec(`CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   username TEXT UNIQUE,
@@ -155,136 +162,223 @@ app.post('/api/register', upload.single('profile_pic'), async (req, res) => {
     console.log('Usuario registrado:', { id: result.lastInsertRowid, username, name, email, phone, socials, profile_pic });
     res.json({ success: true });
   } catch (e) {
-    console.error('Error en /api/register (bcrypt):', e);
-    res.status(500).json({ error: 'Error en el servidor al hashear la contraseña' });
+    console.error('Error en /api/register:', e);
+    res.status(500).json({ error: 'Error en el servidor al registrar usuario' });
   }
 });
 
 // API: Login
 app.post('/api/login', (req, res) => {
   const { username, password } = req.body;
-  const stmt = db.prepare("SELECT * FROM users WHERE username = ?");
-  const user = stmt.get(username);
-  bcrypt.compare(password, user.password).then(match => {
-    if (!user || !match) {
-      return res.status(400).json({ error: 'Credenciales inválidas' });
+  if (!username || !password) {
+    console.error('Faltan username o password en /api/login:', req.body);
+    return res.status(400).json({ error: 'Faltan username o password' });
+  }
+  try {
+    const stmt = db.prepare("SELECT * FROM users WHERE username = ?");
+    const user = stmt.get(username);
+    if (!user) {
+      console.error('Usuario no encontrado:', username);
+      return res.status(401).json({ error: 'Usuario no encontrado' });
+    }
+    const isPasswordValid = bcrypt.compareSync(password, user.password);
+    if (!isPasswordValid) {
+      console.error('Contraseña incorrecta para:', username);
+      return res.status(401).json({ error: 'Contraseña incorrecta' });
     }
     req.session.userId = user.id;
-    console.log('Sesión creada para userId:', req.session.userId);
+    console.log('Sesión creada para userId:', user.id);
     res.json({ success: true, redirect: '/home.html' });
-  }).catch(err => {
-    console.error('Error en /api/login (bcrypt):', err);
-    res.status(500).json({ error: 'Error en servidor' });
-  });
+  } catch (err) {
+    console.error('Error en /api/login:', err);
+    res.status(500).json({ error: 'Error en el servidor' });
+  }
 });
 
 // API: Logout
 app.get('/api/logout', (req, res) => {
-  req.session.destroy();
-  res.redirect('/');
+  req.session.destroy((err) => {
+    if (err) {
+      console.error('Error al destruir sesión:', err);
+      return res.status(500).json({ error: 'Error al cerrar sesión' });
+    }
+    res.redirect('/');
+  });
 });
 
 // API: Get User Info
 app.get('/api/user', isAuthenticated, (req, res) => {
-  const stmt = db.prepare("SELECT * FROM users WHERE id = ?");
-  const user = stmt.get(req.session.userId);
-  if (!user) {
-    return res.status(404).json({ error: 'Usuario no encontrado' });
+  try {
+    const stmt = db.prepare("SELECT * FROM users WHERE id = ?");
+    const user = stmt.get(req.session.userId);
+    if (!user) {
+      console.error('Usuario no encontrado para id:', req.session.userId);
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+    res.json(user);
+  } catch (err) {
+    console.error('Error en /api/user:', err);
+    res.status(500).json({ error: 'Error en la base de datos' });
   }
-  res.json(user);
 });
 
 // API: Update User
 app.post('/api/user/update', isAuthenticated, upload.single('profile_pic'), (req, res) => {
   const { name, email, phone, socials } = req.body;
   const profile_pic = req.file ? `/uploads/${req.file.filename}` : req.body.profile_pic || null;
-  let query = "UPDATE users SET name = ?, email = ?, phone = ?, socials = ?";
-  let params = [name || null, email || null, phone || null, socials || null];
-  if (profile_pic) {
-    query += ", profile_pic = ?";
-    params.push(profile_pic);
-  }
-  query += " WHERE id = ?";
-  params.push(req.session.userId);
   try {
+    let query = "UPDATE users SET name = ?, email = ?, phone = ?, socials = ?";
+    let params = [name || null, email || null, phone || null, socials || null];
+    if (profile_pic) {
+      query += ", profile_pic = ?";
+      params.push(profile_pic);
+    }
+    query += " WHERE id = ?";
+    params.push(req.session.userId);
     const stmt = db.prepare(query);
     stmt.run(...params);
+    console.log('Usuario actualizado:', { id: req.session.userId, name, email, phone, socials, profile_pic });
     res.json({ success: true });
   } catch (err) {
-    console.error('Error actualizando usuario:', err);
+    console.error('Error en /api/user/update:', err);
     res.status(500).json({ error: 'Error en la base de datos' });
   }
 });
 
 // API: Tasks
 app.get('/api/tasks', isAuthenticated, (req, res) => {
-  const stmt = db.prepare("SELECT * FROM tasks WHERE user_id = ?");
-  const rows = stmt.all(req.session.userId);
-  res.json(rows);
+  try {
+    const stmt = db.prepare("SELECT * FROM tasks WHERE user_id = ?");
+    const rows = stmt.all(req.session.userId);
+    res.json(rows);
+  } catch (err) {
+    console.error('Error en /api/tasks:', err);
+    res.status(500).json({ error: 'Error en la base de datos' });
+  }
 });
 
 app.post('/api/tasks', isAuthenticated, (req, res) => {
   const { title, category } = req.body;
-  const stmt = db.prepare("INSERT INTO tasks (user_id, title, category) VALUES (?, ?, ?)");
-  const result = stmt.run(req.session.userId, title, category);
-  res.json({ success: true });
+  if (!title || !category) {
+    console.error('Faltan campos en /api/tasks:', req.body);
+    return res.status(400).json({ error: 'Faltan title o category' });
+  }
+  try {
+    const stmt = db.prepare("INSERT INTO tasks (user_id, title, category) VALUES (?, ?, ?)");
+    const result = stmt.run(req.session.userId, title, category);
+    console.log('Tarea creada:', { id: result.lastInsertRowid, user_id: req.session.userId, title, category });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error en /api/tasks:', err);
+    res.status(500).json({ error: 'Error en la base de datos' });
+  }
 });
 
 app.put('/api/tasks/:id', isAuthenticated, (req, res) => {
   const { title, category, completed } = req.body;
-  const stmt = db.prepare("UPDATE tasks SET title = ?, category = ?, completed = ? WHERE id = ? AND user_id = ?");
-  const result = stmt.run(title, category, completed, req.params.id, req.session.userId);
-  res.json({ success: true });
+  if (!title || !category || completed === undefined) {
+    console.error('Faltan campos en /api/tasks/:id:', req.body);
+    return res.status(400).json({ error: 'Faltan title, category o completed' });
+  }
+  try {
+    const stmt = db.prepare("UPDATE tasks SET title = ?, category = ?, completed = ? WHERE id = ? AND user_id = ?");
+    const result = stmt.run(title, category, completed, req.params.id, req.session.userId);
+    console.log('Tarea actualizada:', { id: req.params.id, user_id: req.session.userId, title, category, completed });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error en /api/tasks/:id:', err);
+    res.status(500).json({ error: 'Error en la base de datos' });
+  }
 });
 
 app.delete('/api/tasks/:id', isAuthenticated, (req, res) => {
-  const stmt = db.prepare("DELETE FROM tasks WHERE id = ? AND user_id = ?");
-  stmt.run(req.params.id, req.session.userId);
-  res.json({ success: true });
+  try {
+    const stmt = db.prepare("DELETE FROM tasks WHERE id = ? AND user_id = ?");
+    stmt.run(req.params.id, req.session.userId);
+    console.log('Tarea eliminada:', { id: req.params.id, user_id: req.session.userId });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error en /api/tasks/:id (delete):', err);
+    res.status(500).json({ error: 'Error en la base de datos' });
+  }
 });
 
 // API: Files
 app.get('/api/files', isAuthenticated, (req, res) => {
-  const stmt = db.prepare("SELECT * FROM files WHERE user_id = ?");
-  const rows = stmt.all(req.session.userId);
-  res.json(rows);
+  try {
+    const stmt = db.prepare("SELECT * FROM files WHERE user_id = ?");
+    const rows = stmt.all(req.session.userId);
+    res.json(rows);
+  } catch (err) {
+    console.error('Error en /api/files:', err);
+    res.status(500).json({ error: 'Error en la base de datos' });
+  }
 });
 
 app.post('/api/files', isAuthenticated, upload.single('file'), (req, res) => {
   const { category } = req.body;
-  const filename = `/uploads/${req.file.filename}`;
-  const stmt = db.prepare("INSERT INTO files (user_id, filename, category) VALUES (?, ?, ?)");
-  const result = stmt.run(req.session.userId, filename, category);
-  res.json({ success: true, filename });
+  if (!req.file || !category) {
+    console.error('Faltan archivo o category en /api/files:', req.body, req.file);
+    return res.status(400).json({ error: 'Faltan archivo o category' });
+  }
+  try {
+    const filename = `/uploads/${req.file.filename}`;
+    const stmt = db.prepare("INSERT INTO files (user_id, filename, category) VALUES (?, ?, ?)");
+    const result = stmt.run(req.session.userId, filename, category);
+    console.log('Archivo subido:', { id: result.lastInsertRowid, user_id: req.session.userId, filename, category });
+    res.json({ success: true, filename });
+  } catch (err) {
+    console.error('Error en /api/files:', err);
+    res.status(500).json({ error: 'Error en la base de datos' });
+  }
 });
 
 app.delete('/api/files/:id', isAuthenticated, (req, res) => {
-  const stmt = db.prepare("SELECT filename FROM files WHERE id = ? AND user_id = ?");
-  const file = stmt.get(req.params.id, req.session.userId);
-  if (file) {
-    const filePath = path.join(__dirname, isProduction ? '/app/data' + file.filename : file.filename);
-    fs.unlink(filePath, (err) => {
-      if (err) console.error('Error eliminando archivo:', err);
-    });
+  try {
+    const stmt = db.prepare("SELECT filename FROM files WHERE id = ? AND user_id = ?");
+    const file = stmt.get(req.params.id, req.session.userId);
+    if (file) {
+      const filePath = path.join(__dirname, isProduction ? '/app/data' + file.filename : file.filename);
+      fs.unlink(filePath, (err) => {
+        if (err) console.error('Error eliminando archivo:', err);
+      });
+    }
+    const deleteStmt = db.prepare("DELETE FROM files WHERE id = ? AND user_id = ?");
+    deleteStmt.run(req.params.id, req.session.userId);
+    console.log('Archivo eliminado:', { id: req.params.id, user_id: req.session.userId });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error en /api/files/:id (delete):', err);
+    res.status(500).json({ error: 'Error en la base de datos' });
   }
-  const deleteStmt = db.prepare("DELETE FROM files WHERE id = ? AND user_id = ?");
-  deleteStmt.run(req.params.id, req.session.userId);
-  res.json({ success: true });
 });
 
 // API: Resources
 app.get('/api/resources', isAuthenticated, (req, res) => {
-  const stmt = db.prepare("SELECT * FROM resources WHERE user_id = ?");
-  const rows = stmt.all(req.session.userId);
-  console.log('Recursos enviados:', rows);
-  res.json(rows);
+  try {
+    const stmt = db.prepare("SELECT * FROM resources WHERE user_id = ?");
+    const rows = stmt.all(req.session.userId);
+    console.log('Recursos enviados:', rows);
+    res.json(rows);
+  } catch (err) {
+    console.error('Error en /api/resources:', err);
+    res.status(500).json({ error: 'Error en la base de datos' });
+  }
 });
 
 app.get('/api/resources/:id', isAuthenticated, (req, res) => {
-  const stmt = db.prepare("SELECT * FROM resources WHERE id = ? AND user_id = ?");
-  const row = stmt.get(req.params.id, req.session.userId);
-  if (!row) return res.status(404).json({ error: 'Recurso no encontrado' });
-  res.json(row);
+  try {
+    const stmt = db.prepare("SELECT * FROM resources WHERE id = ? AND user_id = ?");
+    const row = stmt.get(req.params.id, req.session.userId);
+    if (!row) {
+      console.error('Recurso no encontrado:', req.params.id);
+      return res.status(404).json({ error: 'Recurso no encontrado' });
+    }
+    res.json(row);
+  } catch (err) {
+    console.error('Error en /api/resources/:id:', err);
+    res.status(500).json({ error: 'Error en la base de datos' });
+  }
 });
 
 app.post('/api/resources', isAuthenticated, upload.single('image'), (req, res) => {
@@ -295,10 +389,15 @@ app.post('/api/resources', isAuthenticated, upload.single('image'), (req, res) =
     console.error('Faltan campos obligatorios:', { title, link });
     return res.status(400).json({ error: 'El título y el enlace son obligatorios' });
   }
-  const stmt = db.prepare("INSERT INTO resources (user_id, title, link, image) VALUES (?, ?, ?, ?)");
-  const result = stmt.run(req.session.userId, title, link, image);
-  console.log('Recurso insertado:', { id: result.lastInsertRowid, user_id: req.session.userId, title, link, image });
-  res.json({ success: true, id: result.lastInsertRowid });
+  try {
+    const stmt = db.prepare("INSERT INTO resources (user_id, title, link, image) VALUES (?, ?, ?, ?)");
+    const result = stmt.run(req.session.userId, title, link, image);
+    console.log('Recurso insertado:', { id: result.lastInsertRowid, user_id: req.session.userId, title, link, image });
+    res.json({ success: true, id: result.lastInsertRowid });
+  } catch (err) {
+    console.error('Error en /api/resources:', err);
+    res.status(500).json({ error: 'Error en la base de datos' });
+  }
 });
 
 app.put('/api/resources/:id', isAuthenticated, upload.single('image'), (req, res) => {
@@ -309,113 +408,200 @@ app.put('/api/resources/:id', isAuthenticated, upload.single('image'), (req, res
     console.error('Faltan campos obligatorios:', { title, link });
     return res.status(400).json({ error: 'El título y el enlace son obligatorios' });
   }
-  let query = "UPDATE resources SET title = ?, link = ?";
-  let params = [title, link];
-  if (image) {
-    query += ", image = ?";
-    params.push(image);
+  try {
+    let query = "UPDATE resources SET title = ?, link = ?";
+    let params = [title, link];
+    if (image) {
+      query += ", image = ?";
+      params.push(image);
+    }
+    query += " WHERE id = ? AND user_id = ?";
+    params.push(req.params.id, req.session.userId);
+    const stmt = db.prepare(query);
+    stmt.run(...params);
+    console.log('Recurso actualizado:', { id: req.params.id, user_id: req.session.userId });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error en /api/resources/:id:', err);
+    res.status(500).json({ error: 'Error en la base de datos' });
   }
-  query += " WHERE id = ? AND user_id = ?";
-  params.push(req.params.id, req.session.userId);
-  const stmt = db.prepare(query);
-  stmt.run(...params);
-  console.log('Recurso actualizado:', { id: req.params.id });
-  res.json({ success: true });
 });
 
 app.delete('/api/resources/:id', isAuthenticated, (req, res) => {
-  const stmt = db.prepare("SELECT image FROM resources WHERE id = ? AND user_id = ?");
-  const resource = stmt.get(req.params.id, req.session.userId);
-  if (resource && resource.image) {
-    const filePath = path.join(__dirname, isProduction ? '/app/data' + resource.image : resource.image);
-    fs.unlink(filePath, err => {
-      if (err) console.error('Error eliminando imagen:', err);
-    });
+  try {
+    const stmt = db.prepare("SELECT image FROM resources WHERE id = ? AND user_id = ?");
+    const resource = stmt.get(req.params.id, req.session.userId);
+    if (resource && resource.image) {
+      const filePath = path.join(__dirname, isProduction ? '/app/data' + resource.image : resource.image);
+      fs.unlink(filePath, err => {
+        if (err) console.error('Error eliminando imagen:', err);
+      });
+    }
+    const deleteStmt = db.prepare("DELETE FROM resources WHERE id = ? AND user_id = ?");
+    deleteStmt.run(req.params.id, req.session.userId);
+    console.log('Recurso eliminado:', { id: req.params.id, user_id: req.session.userId });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error en /api/resources/:id (delete):', err);
+    res.status(500).json({ error: 'Error en la base de datos' });
   }
-  const deleteStmt = db.prepare("DELETE FROM resources WHERE id = ? AND user_id = ?");
-  deleteStmt.run(req.params.id, req.session.userId);
-  console.log('Recurso eliminado:', { id: req.params.id });
-  res.json({ success: true });
 });
 
 // API: Notes
 app.get('/api/notes', isAuthenticated, (req, res) => {
-  const stmt = db.prepare("SELECT * FROM notes WHERE user_id = ?");
-  const rows = stmt.all(req.session.userId);
-  res.json(rows);
+  try {
+    const stmt = db.prepare("SELECT * FROM notes WHERE user_id = ?");
+    const rows = stmt.all(req.session.userId);
+    res.json(rows);
+  } catch (err) {
+    console.error('Error en /api/notes:', err);
+    res.status(500).json({ error: 'Error en la base de datos' });
+  }
 });
 
 app.post('/api/notes', isAuthenticated, (req, res) => {
   const { content } = req.body;
-  const stmt = db.prepare("INSERT INTO notes (user_id, content) VALUES (?, ?)");
-  stmt.run(req.session.userId, content);
-  res.json({ success: true });
+  if (!content) {
+    console.error('Falta content en /api/notes:', req.body);
+    return res.status(400).json({ error: 'Falta content' });
+  }
+  try {
+    const stmt = db.prepare("INSERT INTO notes (user_id, content) VALUES (?, ?)");
+    const result = stmt.run(req.session.userId, content);
+    console.log('Nota creada:', { id: result.lastInsertRowid, user_id: req.session.userId, content });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error en /api/notes:', err);
+    res.status(500).json({ error: 'Error en la base de datos' });
+  }
 });
 
 app.put('/api/notes/:id', isAuthenticated, (req, res) => {
   const { content } = req.body;
-  const stmt = db.prepare("UPDATE notes SET content = ? WHERE id = ? AND user_id = ?");
-  stmt.run(content, req.params.id, req.session.userId);
-  res.json({ success: true });
+  if (!content) {
+    console.error('Falta content en /api/notes/:id:', req.body);
+    return res.status(400).json({ error: 'Falta content' });
+  }
+  try {
+    const stmt = db.prepare("UPDATE notes SET content = ? WHERE id = ? AND user_id = ?");
+    const result = stmt.run(content, req.params.id, req.session.userId);
+    console.log('Nota actualizada:', { id: req.params.id, user_id: req.session.userId, content });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error en /api/notes/:id:', err);
+    res.status(500).json({ error: 'Error en la base de datos' });
+  }
 });
 
 app.delete('/api/notes/:id', isAuthenticated, (req, res) => {
-  const stmt = db.prepare("DELETE FROM notes WHERE id = ? AND user_id = ?");
-  stmt.run(req.params.id, req.session.userId);
-  res.json({ success: true });
+  try {
+    const stmt = db.prepare("DELETE FROM notes WHERE id = ? AND user_id = ?");
+    stmt.run(req.params.id, req.session.userId);
+    console.log('Nota eliminada:', { id: req.params.id, user_id: req.session.userId });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error en /api/notes/:id (delete):', err);
+    res.status(500).json({ error: 'Error en la base de datos' });
+  }
 });
 
 // API: Topics
 app.get('/api/topics', isAuthenticated, (req, res) => {
-  const stmt = db.prepare("SELECT * FROM topics");
-  const rows = stmt.all();
-  console.log('Temas enviados:', rows);
-  res.json(rows);
+  try {
+    const stmt = db.prepare("SELECT * FROM topics");
+    const rows = stmt.all();
+    console.log('Temas enviados:', rows);
+    res.json(rows);
+  } catch (err) {
+    console.error('Error en /api/topics:', err);
+    res.status(500).json({ error: 'Error en la base de datos' });
+  }
 });
 
 app.get('/api/topics/:id', isAuthenticated, (req, res) => {
-  const stmt = db.prepare("SELECT * FROM topics WHERE id = ?");
-  const row = stmt.get(req.params.id);
-  if (!row) return res.status(404).json({ error: 'Tema no encontrado' });
-  res.json(row);
+  try {
+    const stmt = db.prepare("SELECT * FROM topics WHERE id = ?");
+    const row = stmt.get(req.params.id);
+    if (!row) {
+      console.error('Tema no encontrado:', req.params.id);
+      return res.status(404).json({ error: 'Tema no encontrado' });
+    }
+    res.json(row);
+  } catch (err) {
+    console.error('Error en /api/topics/:id:', err);
+    res.status(500).json({ error: 'Error en la base de datos' });
+  }
 });
 
 app.post('/api/topics', isAuthenticated, upload.single('image'), (req, res) => {
   const { subject, subtopic, explanation, link } = req.body;
   const image = req.file ? `/uploads/${req.file.filename}` : null;
-  const stmt = db.prepare("INSERT INTO topics (subject, subtopic, explanation, image, link) VALUES (?, ?, ?, ?, ?)");
-  const result = stmt.run(subject, subtopic, explanation, image, link);
-  res.json({ success: true });
+  if (!subject || !subtopic || !explanation) {
+    console.error('Faltan campos obligatorios en /api/topics:', req.body);
+    return res.status(400).json({ error: 'Faltan subject, subtopic o explanation' });
+  }
+  try {
+    const stmt = db.prepare("INSERT INTO topics (subject, subtopic, explanation, image, link) VALUES (?, ?, ?, ?, ?)");
+    const result = stmt.run(subject, subtopic, explanation, image, link);
+    console.log('Tema creado:', { id: result.lastInsertRowid, subject, subtopic, explanation, image, link });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error en /api/topics:', err);
+    res.status(500).json({ error: 'Error en la base de datos' });
+  }
 });
 
 app.put('/api/topics/:id', isAuthenticated, upload.single('image'), (req, res) => {
   const { subject, subtopic, explanation, link } = req.body;
   const image = req.file ? `/uploads/${req.file.filename}` : req.body.image || null;
-  let query = "UPDATE topics SET subject = ?, subtopic = ?, explanation = ?, link = ?";
-  let params = [subject, subtopic, explanation, link];
-  if (image) {
-    query += ", image = ?";
-    params.push(image);
+  if (!subject || !subtopic || !explanation) {
+    console.error('Faltan campos obligatorios en /api/topics/:id:', req.body);
+    return res.status(400).json({ error: 'Faltan subject, subtopic o explanation' });
   }
-  query += " WHERE id = ?";
-  params.push(req.params.id);
-  const stmt = db.prepare(query);
-  stmt.run(...params);
-  res.json({ success: true });
+  try {
+    let query = "UPDATE topics SET subject = ?, subtopic = ?, explanation = ?, link = ?";
+    let params = [subject, subtopic, explanation, link];
+    if (image) {
+      query += ", image = ?";
+      params.push(image);
+    }
+    query += " WHERE id = ?";
+    params.push(req.params.id);
+    const stmt = db.prepare(query);
+    stmt.run(...params);
+    console.log('Tema actualizado:', { id: req.params.id, subject, subtopic, explanation, image, link });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error en /api/topics/:id:', err);
+    res.status(500).json({ error: 'Error en la base de datos' });
+  }
 });
 
 app.delete('/api/topics/:id', isAuthenticated, (req, res) => {
-  const stmt = db.prepare("SELECT image FROM topics WHERE id = ?");
-  const topic = stmt.get(req.params.id);
-  if (topic && topic.image) {
-    const filePath = path.join(__dirname, isProduction ? '/app/data' + topic.image : topic.image);
-    fs.unlink(filePath, err => {
-      if (err) console.error('Error eliminando imagen:', err);
-    });
+  try {
+    const stmt = db.prepare("SELECT image FROM topics WHERE id = ?");
+    const topic = stmt.get(req.params.id);
+    if (topic && topic.image) {
+      const filePath = path.join(__dirname, isProduction ? '/app/data' + topic.image : topic.image);
+      fs.unlink(filePath, err => {
+        if (err) console.error('Error eliminando imagen:', err);
+      });
+    }
+    const deleteStmt = db.prepare("DELETE FROM topics WHERE id = ?");
+    deleteStmt.run(req.params.id);
+    console.log('Tema eliminado:', { id: req.params.id });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error en /api/topics/:id (delete):', err);
+    res.status(500).json({ error: 'Error en la base de datos' });
   }
-  const deleteStmt = db.prepare("DELETE FROM topics WHERE id = ?");
-  deleteStmt.run(req.params.id);
-  res.json({ success: true });
+});
+
+// Cerrar conexión a la base de datos al apagar el servidor
+process.on('SIGTERM', () => {
+  console.log('Cerrando servidor y conexión a la base de datos');
+  db.close();
+  process.exit(0);
 });
 
 app.listen(port, () => console.log(`Server running on http://localhost:${port}`));
