@@ -23,7 +23,6 @@ const ensureDirectoryExists = (dirPath) => {
       fs.mkdirSync(dirPath, { recursive: true, mode: 0o777 });
       console.log(`Carpeta creada: ${dirPath}`);
     } else {
-      // Asegurar permisos de escritura
       fs.chmodSync(dirPath, 0o777);
       console.log(`Permisos actualizados para: ${dirPath}`);
     }
@@ -153,7 +152,6 @@ try {
 // Healthcheck para Railway
 app.get('/health', (req, res) => {
   try {
-    // Verificar que la base de datos esté accesible
     db.prepare('SELECT 1').get();
     res.status(200).json({ status: 'ok' });
   } catch (err) {
@@ -168,6 +166,12 @@ function isAuthenticated(req, res, next) {
   if (req.session.userId) return next();
   res.status(401).json({ error: 'No autorizado' });
 }
+
+// Middleware de manejo de errores global
+app.use((err, req, res, next) => {
+  console.error('Error no capturado:', err.stack);
+  res.status(500).json({ error: 'Error interno del servidor' });
+});
 
 // Rutas Frontend
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public/index.html')));
