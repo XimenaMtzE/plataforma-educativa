@@ -16,15 +16,20 @@ const isProduction = process.env.NODE_ENV === 'production';
 const dbPath = isProduction ? '/app/data/db.sqlite' : 'db.sqlite';
 const uploadsPath = isProduction ? '/app/data/uploads/' : 'uploads/';
 
-// Crear carpetas necesarias
+// Crear carpetas necesarias con permisos adecuados
 const ensureDirectoryExists = (dirPath) => {
   try {
     if (!fs.existsSync(dirPath)) {
-      fs.mkdirSync(dirPath, { recursive: true });
+      fs.mkdirSync(dirPath, { recursive: true, mode: 0o777 });
       console.log(`Carpeta creada: ${dirPath}`);
+    } else {
+      // Asegurar permisos de escritura
+      fs.chmodSync(dirPath, 0o777);
+      console.log(`Permisos actualizados para: ${dirPath}`);
     }
   } catch (err) {
-    console.error(`Error creando carpeta ${dirPath}:`, err);
+    console.error(`Error creando/actualizando carpeta ${dirPath}:`, err);
+    throw err;
   }
 };
 
@@ -44,7 +49,7 @@ if (isProduction) {
 }
 app.use(session({
   store: new SQLiteStore({
-    db: dbPath,
+    db: 'sessions.sqlite',
     dir: isProduction ? '/app/data' : '.',
     concurrentDB: true
   }),
@@ -65,65 +70,77 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 // DB Setup con better-sqlite3
-const db = new Database(dbPath);
-db.pragma('journal_mode = WAL'); // Modo de escritura seguro
+let db;
+try {
+  db = new Database(dbPath, { fileMustExist: false });
+  db.pragma('journal_mode = WAL'); // Modo de escritura seguro
+  console.log(`Base de datos conectada: ${dbPath}`);
+} catch (err) {
+  console.error(`Error al abrir la base de datos ${dbPath}:`, err);
+  process.exit(1); // Terminar proceso si no se puede conectar
+}
 
 // Crear tablas si no existen
-db.exec(`CREATE TABLE IF NOT EXISTS users (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  username TEXT UNIQUE,
-  name TEXT,
-  email TEXT UNIQUE,
-  password TEXT,
-  register_date DATE,
-  profile_pic TEXT,
-  phone TEXT,
-  socials TEXT
-)`);
+try {
+  db.exec(`CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT UNIQUE,
+    name TEXT,
+    email TEXT UNIQUE,
+    password TEXT,
+    register_date DATE,
+    profile_pic TEXT,
+    phone TEXT,
+    socials TEXT
+  )`);
 
-db.exec(`CREATE TABLE IF NOT EXISTS tasks (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id INTEGER,
-  title TEXT,
-  category TEXT,
-  completed BOOLEAN DEFAULT 0
-)`);
+  db.exec(`CREATE TABLE IF NOT EXISTS tasks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    title TEXT,
+    category TEXT,
+    completed BOOLEAN DEFAULT 0
+  )`);
 
-db.exec(`CREATE TABLE IF NOT EXISTS files (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id INTEGER,
-  filename TEXT,
-  category TEXT
-)`);
+  db.exec(`CREATE TABLE IF NOT EXISTS files (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    filename TEXT,
+    category TEXT
+  )`);
 
-db.exec(`CREATE TABLE IF NOT EXISTS resources (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id INTEGER,
-  title TEXT NOT NULL,
-  link TEXT NOT NULL,
-  image TEXT
-)`);
+  db.exec(`CREATE TABLE IF NOT EXISTS resources (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    title TEXT NOT NULL,
+    link TEXT NOT NULL,
+    image TEXT
+  )`);
 
-db.exec(`CREATE TABLE IF NOT EXISTS notes (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id INTEGER,
-  content TEXT
-)`);
+  db.exec(`CREATE TABLE IF NOT EXISTS notes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    content TEXT
+  )`);
 
-db.exec(`CREATE TABLE IF NOT EXISTS topics (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  subject TEXT,
-  subtopic TEXT,
-  explanation TEXT,
-  image TEXT,
-  link TEXT
-)`);
+  db.exec(`CREATE TABLE IF NOT EXISTS topics (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    subject TEXT,
+    subtopic TEXT,
+    explanation TEXT,
+    image TEXT,
+    link TEXT
+  )`);
 
-// Verificar si la columna 'image' existe en resources, y añadirla si no
-const resourceTableInfo = db.prepare("PRAGMA table_info(resources)").all();
-if (!resourceTableInfo.find(col => col.name === 'image')) {
-  db.exec("ALTER TABLE resources ADD COLUMN image TEXT");
-  console.log("Columna 'image' añadida a la tabla resources");
+  // Verificar si la columna 'image' existe en resources, y añadirla si no
+  const resourceTableInfo = db.prepare("PRAGMA table_info(resources)").all();
+  if (!resourceTableInfo.find(col => col.name === 'image')) {
+    db.exec("ALTER TABLE resources ADD COLUMN image TEXT");
+    console.log("Columna 'image' añadida a la tabla resources");
+  }
+} catch (err) {
+  console.error('Error al crear tablas:', err);
+  process.exit(1);
 }
 
 // Middleware para check login
@@ -600,7 +617,7 @@ app.delete('/api/topics/:id', isAuthenticated, (req, res) => {
 // Cerrar conexión a la base de datos al apagar el servidor
 process.on('SIGTERM', () => {
   console.log('Cerrando servidor y conexión a la base de datos');
-  db.close();
+  if (db) db.close();
   process.exit(0);
 });
 
